@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/layout :: page('Runs', ~{::section})}" lang="en">
+<body>
+<section>
+    <h1>Runs</h1>
+
+    <form method="post" th:action="@{/runs}" class="run-form">
+        <div class="field field-wide">
+            <label for="input">Input</label>
+            <textarea id="input" name="input" rows="3" required
+                      placeholder="What should the model be asked?"></textarea>
+        </div>
+        <div class="field field-wide">
+            <label for="systemPrompt">System prompt <span class="subtle">(optional)</span></label>
+            <textarea id="systemPrompt" name="systemPrompt" rows="2"
+                      placeholder="Leave empty to send none."></textarea>
+        </div>
+        <div class="field field-wide" th:if="${!#lists.isEmpty(availableTools)}">
+            <label>Tools to expose</label>
+            <div class="tool-picker">
+                <label class="tool-chip" th:each="t : ${availableTools}">
+                    <input type="checkbox" name="tools" th:value="${t}">
+                    <code th:text="${t}">tool</code>
+                </label>
+            </div>
+            <span class="subtle">
+                Select none for a plain single-turn completion. How many tools are in front of it is
+                one of the strongest influences on whether a small model picks the right one.
+            </span>
+        </div>
+
+        <div class="field-row">
+            <div class="field">
+                <label for="modelKey">Model</label>
+                <input id="modelKey" name="modelKey" th:value="${defaultModel}" placeholder="model key">
+            </div>
+            <div class="field">
+                <label for="temperature">Temperature</label>
+                <input id="temperature" name="temperature" type="number" step="0.05" min="0" max="2" value="0">
+            </div>
+            <div class="field">
+                <label for="maxOutputTokens">Max output tokens</label>
+                <input id="maxOutputTokens" name="maxOutputTokens" type="number" min="16" step="16"
+                       th:value="${defaultMaxOutputTokens}">
+            </div>
+            <div class="field">
+                <label for="maxSteps">Max steps</label>
+                <input id="maxSteps" name="maxSteps" type="number" min="1" max="50"
+                       th:value="${defaultMaxSteps}">
+            </div>
+            <div class="field field-submit">
+                <button type="submit">Start run</button>
+            </div>
+        </div>
+
+        <div class="field-row">
+            <label class="tool-chip">
+                <input type="checkbox" name="lenientArguments" value="true">
+                <span>Lenient arguments</span>
+            </label>
+            <span class="subtle">
+                Off by default. Repairs malformed arguments — fenced blobs, quoted numbers, trailing
+                commas — before rejecting them. Useful to get a run through, but it hides the very
+                failure you may be trying to measure, so every repair is journalled.
+            </span>
+        </div>
+        <p class="subtle form-note">
+            On a reasoning model the output allowance covers the chain of thought as well as the
+            answer, so too small a value produces an empty response rather than a short one. The
+            harness reports that case as <code>ABORTED_BUDGET</code> rather than as success.
+        </p>
+    </form>
+
+    <h2>Recent runs</h2>
+    <table>
+        <thead>
+        <tr>
+            <th>Started</th>
+            <th>Status</th>
+            <th>Input</th>
+            <th>Model</th>
+            <th>Steps</th>
+            <th>Tools</th>
+            <th>Tokens in/out</th>
+            <th>Duration</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="run : ${runs}">
+            <td class="nowrap">
+                <a th:href="@{'/runs/' + ${run.id}}" th:text="${#temporals.format(run.startedAt, 'HH:mm:ss')}">time</a>
+            </td>
+            <td>
+                <span class="badge"
+                      th:classappend="${run.status.name() == 'FINISHED'} ? 'badge-ok' :
+                                      (${run.status.name() == 'RUNNING'} ? 'badge-warn' : 'badge-error')"
+                      th:text="${run.status}">status</span>
+            </td>
+            <td th:text="${run.inputPreview()}">input</td>
+            <td><code th:text="${run.modelKey}">model</code></td>
+            <td th:text="${run.stepsUsed}">0</td>
+            <td class="nowrap">
+                <span th:text="${run.toolCallsTotal}">0</span><!--
+             --><span class="badge badge-error" th:if="${run.toolCallsInvalid > 0}"
+                      th:text="${run.toolCallsInvalid} + ' invalid'">0</span>
+            </td>
+            <td class="nowrap" th:text="${run.inputTokens} + ' / ' + ${run.outputTokens}">0 / 0</td>
+            <td class="nowrap" th:text="${run.durationMs != null} ? ${run.durationMs} + ' ms' : '—'">—</td>
+        </tr>
+        <tr th:if="${#lists.isEmpty(runs)}">
+            <td colspan="8" class="empty">No runs yet. Start one above.</td>
+        </tr>
+        </tbody>
+    </table>
+</section>
+</body>
+</html>

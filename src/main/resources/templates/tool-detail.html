@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/layout :: page('Tool', ~{::section})}" lang="en">
+<body>
+<section>
+    <div class="run-header">
+        <div>
+            <h1 th:text="${tool.name}">tool</h1>
+            <span class="subtle" th:text="'version ' + ${tool.version} + ' · ' + ${tool.source}">v1</span>
+        </div>
+        <div>
+            <span class="badge badge-ok" th:if="${tool.enabled}">enabled</span>
+            <span class="badge badge-warn" th:unless="${tool.enabled}">disabled</span>
+            <span class="badge" th:text="${tool.executorType}">BUILTIN</span>
+        </div>
+    </div>
+
+    <h2>Description <span class="subtle">— what the model is told</span></h2>
+    <pre class="answer" th:text="${tool.description}">description</pre>
+
+    <h2>Argument schema</h2>
+    <pre class="payload" th:text="${schema}">{}</pre>
+
+    <div th:if="${!#strings.isEmpty(executorConfig)}">
+        <h2>Executor config</h2>
+        <pre class="payload" th:text="${executorConfig}">{}</pre>
+    </div>
+
+    <h2>Version history <span class="subtle">— the record of what was tried</span></h2>
+    <table>
+        <thead>
+        <tr>
+            <th>Version</th>
+            <th>Created</th>
+            <th>State</th>
+            <th>Change note</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="v : ${versions}">
+            <td th:text="'v' + ${v.version}">v1</td>
+            <td class="nowrap" th:text="${#temporals.format(v.createdAt, 'yyyy-MM-dd HH:mm')}">date</td>
+            <td>
+                <span class="badge badge-ok" th:if="${v.current}">current</span>
+                <span class="subtle" th:unless="${v.current}">superseded</span>
+            </td>
+            <td class="subtle" th:text="${v.changeNote} ?: '—'">note</td>
+        </tr>
+        </tbody>
+    </table>
+
+    <h2>Try it</h2>
+    <p class="subtle">
+        Runs the tool directly, through the same validator the loop uses. When a run misbehaves the
+        first question is whether the tool works at all, and asking the model takes a minute and
+        confounds two variables.
+    </p>
+    <!-- Built without a line continuation: a backslash before a quote inside a Thymeleaf
+         string literal escapes the quote, so the expression never terminates and the whole
+         page fails to parse. One line is also easier to copy. -->
+    <pre class="payload" th:text="|curl -X POST http://localhost:8080/api/tools/${tool.name}/test -H 'Content-Type: application/json' -d '{}'|">curl</pre>
+
+    <h2>How the model copes with it <span class="subtle">&mdash; read from the journal</span></h2>
+
+    <p class="subtle" th:unless="${usage.hasEvidence()}">
+        No calls to this tool are recorded yet. Run something that uses it and this fills in.
+    </p>
+
+    <div th:if="${usage.hasEvidence()}">
+        <div class="stats">
+            <div class="stat">
+                <span class="stat-value pass-rate"
+                      th:classappend="${usage.invalidRate() == 0} ? 'pass-good' :
+                                      (${usage.invalidRate() < 0.2} ? 'pass-mixed' : 'pass-bad')"
+                      th:text="${#numbers.formatPercent(usage.invalidRate(), 1, 0)}">0%</span>
+                <span class="stat-label">calls rejected</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value" th:text="${usage.calls}">0</span>
+                <span class="stat-label">calls seen</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value" th:text="${usage.executions}">0</span>
+                <span class="stat-label">executions</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value pass-rate"
+                      th:classappend="${usage.executionFailureRate() == 0} ? 'pass-good' : 'pass-bad'"
+                      th:text="${#numbers.formatPercent(usage.executionFailureRate(), 1, 0)}">0%</span>
+                <span class="stat-label">executions failed</span>
+            </div>
+        </div>
+
+        <p class="note" th:unless="${usage.isSubstantial()}">
+            Fewer than five calls. One rejection out of three is 33% and is also nothing &mdash; the
+            same reason a five-repetition batch cannot separate 100% from 80%. Worth gathering more
+            before changing anything on this evidence.
+        </p>
+
+        <div th:if="${!#lists.isEmpty(usage.fields)}">
+            <h3>Which argument goes wrong</h3>
+            <p class="subtle">
+                The most actionable line here: a rejection count says there is a problem, this says
+                where it is.
+            </p>
+            <table>
+                <thead><tr><th>Argument path</th><th>Times</th></tr></thead>
+                <tbody>
+                <tr th:each="f : ${usage.fields}">
+                    <td><code th:text="${f.value}">$/to</code></td>
+                    <td th:text="${f.count}">0</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div th:if="${!#lists.isEmpty(usage.rejectedSamples)}">
+            <h3>What the model actually wrote</h3>
+            <pre class="payload" th:each="sample : ${usage.rejectedSamples}" th:text="${sample}">{}</pre>
+        </div>
+
+        <div th:if="${!#lists.isEmpty(usage.successfulCalls)}">
+            <h3>Calls that worked</h3>
+            <pre class="payload" th:each="sample : ${usage.successfulCalls}" th:text="${sample}">{}</pre>
+        </div>
+    </div>
+
+    <h2>Change it, then measure it</h2>
+    <p class="note">
+        Neither of these is applied until you say so, and both save a <strong>new version</strong>
+        rather than editing this one. That is what the version history is for: a description that
+        reads better is not the same as one the model performs better under, and the only thing that
+        settles which is a batch against the version it replaced.
+    </p>
+
+    <form method="post" th:action="@{'/tools/' + ${tool.name} + '/learn-examples'}" class="inline-form">
+        <button type="submit">Add examples from successful calls</button>
+        <span class="subtle">
+            Writes real calls into the schema's <code>examples</code>, which the model sees. Nothing
+            is invented.
+        </span>
+    </form>
+
+    <form method="post" th:action="@{'/tools/' + ${tool.name} + '/draft-description'}" class="inline-form">
+        <button type="submit">Draft a description from the failures</button>
+        <span class="subtle">Asks a model. Slow, and it queues behind any run using the model.</span>
+    </form>
+
+    <div th:if="${draft}">
+        <h3>Proposed description</h3>
+        <p class="subtle">Read it against the current one above before applying.</p>
+        <form method="post" th:action="@{'/tools/' + ${tool.name} + '/apply-description'}"
+              class="run-form">
+            <div class="field field-wide">
+                <label for="description">Description</label>
+                <textarea id="description" name="description" rows="5" th:text="${draft}"></textarea>
+            </div>
+            <button type="submit">Save as a new version</button>
+        </form>
+    </div>
+
+    <form th:if="${tool.source.name() == 'BUILTIN'}" method="post"
+          th:action="@{'/tools/' + ${tool.name} + '/reseed'}" class="inline-form">
+        <button type="submit">Take up the compiled definition</button>
+        <span class="subtle">
+            Saves the built-in's current code description and schema as a new version. Seeding never
+            overwrites on its own, so this is how an improved built-in reaches a registry that already
+            has one.
+        </span>
+    </form>
+
+    <form method="post" th:action="@{'/tools/' + ${tool.name} + '/retire'}" class="inline-form">
+        <button type="submit" class="danger">Retire this tool</button>
+        <span class="subtle">Versions are kept, so past runs stay explicable.</span>
+    </form>
+</section>
+</body>
+</html>

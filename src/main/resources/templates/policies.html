@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/layout :: page('Policies', ~{::section})}" lang="en">
+<body>
+<section>
+    <h1>Policies</h1>
+
+    <div th:if="${!#lists.isEmpty(pending)}">
+        <h2>Waiting for you <span class="badge badge-warn" th:text="${#lists.size(pending)}">0</span></h2>
+        <div class="transcript">
+            <article class="msg msg-tool" th:each="p : ${pending}">
+                <header>
+                    <span class="role">awaiting approval</span>
+                    <code th:text="${p.toolName}">tool</code>
+                    <span class="subtle" th:text="${p.reason}">why</span>
+                </header>
+                <pre th:text="${p.argumentsJson}">{}</pre>
+                <a th:href="@{'/runs/' + ${p.runId}}">Open the run to decide &rarr;</a>
+            </article>
+        </div>
+    </div>
+
+    <p class="note">
+        A call matching no rule simply runs, so this is a list of exceptions rather than a list of
+        permissions. That keeps the harness usable for unattended repeated runs, which is its main
+        use. The boundaries that actually contain the model &mdash; the HTTP egress allowlist and the
+        stdio command allowlist &mdash; are enforced separately and cannot be switched off by a rule
+        here.
+    </p>
+
+    <table>
+        <thead>
+        <tr>
+            <th>Priority</th>
+            <th>Name</th>
+            <th>Matches</th>
+            <th>Mode</th>
+            <th>Rate limit</th>
+            <th>State</th>
+            <th class="actions-col">Actions</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="p : ${policies}">
+            <td th:text="${p.priority}">100</td>
+            <td th:text="${p.name}">name</td>
+            <td><code th:text="${p.toolNamePattern}">*</code></td>
+            <td>
+                <span class="badge"
+                      th:classappend="${p.approvalMode.name() == 'AUTO'} ? 'badge-ok' :
+                                      (${p.approvalMode.name() == 'DENY'} ? 'badge-error' : 'badge-warn')"
+                      th:text="${p.approvalMode}">AUTO</span>
+            </td>
+            <td class="subtle" th:text="${p.rateLimitPerRun} ?: '—'">—</td>
+            <td>
+                <span class="badge badge-ok" th:if="${p.enabled}">enabled</span>
+                <span class="badge badge-warn" th:unless="${p.enabled}">disabled</span>
+            </td>
+            <td class="actions-col">
+                <form method="post" th:action="@{'/policies/' + ${p.id} + '/enabled'}" class="inline-form">
+                    <input type="hidden" name="value" th:value="${!p.enabled}">
+                    <button type="submit" th:text="${p.enabled} ? 'Disable' : 'Enable'">Toggle</button>
+                </form>
+            </td>
+        </tr>
+        </tbody>
+    </table>
+    <p class="subtle">Lower priority wins, so a specific rule overrides a general one.</p>
+
+    <h2>Add a rule</h2>
+    <form method="post" th:action="@{/policies}" class="run-form">
+        <div class="field-row">
+            <div class="field">
+                <label for="name">Name</label>
+                <input id="name" name="name" required placeholder="approve-http">
+            </div>
+            <div class="field">
+                <label for="toolNamePattern">Matches</label>
+                <input id="toolNamePattern" name="toolNamePattern" required value="*"
+                       list="tool-names" placeholder="http_*">
+                <datalist id="tool-names">
+                    <option th:each="t : ${toolNames}" th:value="${t}"></option>
+                </datalist>
+                <span class="subtle"><code>*</code> and <code>?</code> are wildcards; everything else is literal.</span>
+            </div>
+            <div class="field">
+                <label for="approvalMode">Mode</label>
+                <select id="approvalMode" name="approvalMode">
+                    <option th:each="m : ${modes}" th:value="${m}" th:text="${m}">AUTO</option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="priority">Priority</label>
+                <input id="priority" name="priority" type="number" value="100" min="1">
+            </div>
+            <div class="field">
+                <label for="rateLimitPerRun">Rate limit <span class="subtle">(per run)</span></label>
+                <input id="rateLimitPerRun" name="rateLimitPerRun" type="number" min="1" placeholder="—">
+            </div>
+            <div class="field field-submit">
+                <button type="submit">Add rule</button>
+            </div>
+        </div>
+    </form>
+</section>
+</body>
+</html>

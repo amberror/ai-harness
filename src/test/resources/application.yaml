@@ -1,0 +1,25 @@
+# Tests run against a throwaway in-memory database so they neither depend on nor pollute the
+# developer's ./data directory. Flyway still runs, which makes every test an implicit check that
+# the baseline migration is valid SQL.
+spring:
+  datasource:
+    url: jdbc:h2:mem:ai-controll-test;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+
+harness:
+  lm-studio:
+    base-url: http://localhost:1234
+    connect-timeout: 1s
+    read-timeout: 5s
+
+logging:
+  level:
+    com.example.ai_controll: INFO

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/layout :: page('Dashboard', ~{::section})}" lang="en">
+<body>
+<section>
+    <h1>Dashboard</h1>
+
+    <div class="card card-down" th:unless="${reachable}">
+        <h2>LM Studio is not reachable</h2>
+        <p th:text="${unreachableMessage}">Cannot connect.</p>
+        <p>Start it with <code>lms server start</code>, or open LM Studio and switch on the server
+            toggle on the Developer page.</p>
+    </div>
+
+    <div th:if="${reachable}">
+        <div class="stats">
+            <div class="stat">
+                <span class="stat-value" th:text="${totalModels}">0</span>
+                <span class="stat-label">models available</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value" th:text="${llmCount}">0</span>
+                <span class="stat-label">LLMs</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value" th:text="${toolCapableCount}">0</span>
+                <span class="stat-label">trained for tool use</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value" th:text="${#lists.size(loaded)}">0</span>
+                <span class="stat-label">loaded now</span>
+            </div>
+        </div>
+
+        <h2>Loaded models</h2>
+        <p class="empty" th:if="${#lists.isEmpty(loaded)}">
+            Nothing is loaded. Load a model from the <a th:href="@{/models}">Models</a> page.
+        </p>
+
+        <table th:unless="${#lists.isEmpty(loaded)}">
+            <thead>
+            <tr>
+                <th>Instance</th>
+                <th>Context length</th>
+                <th>Flash attention</th>
+                <th>Tool use</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="model : ${loaded}" th:with="instance=${model.loadedInstances[0]}">
+                <td><code th:text="${instance.id}">key</code></td>
+                <td th:text="${instance.config != null ? instance.config.contextLength : '—'}">—</td>
+                <td th:text="${instance.config != null ? instance.config.flashAttention : '—'}">—</td>
+                <td>
+                    <span class="badge badge-ok" th:if="${model.supportsToolUse()}">yes</span>
+                    <span class="badge badge-warn" th:unless="${model.supportsToolUse()}">not trained for it</span>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+
+        <div class="note">
+            <strong>Why tool-use capability is called out.</strong>
+            The harness drives the agentic loop itself over the OpenAI-compatible endpoint, because
+            LM Studio's native <code>/api/v1/chat</code> accepts neither custom tools nor assistant
+            messages. Driving a model that was not trained for tool calling is the most common cause
+            of a model that simply ignores the tools it was given.
+        </div>
+    </div>
+</section>
+</body>
+</html>

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:fragment="page(pageTitle, content)" lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title th:text="'AI Control &middot; ' + ${pageTitle}">AI Control</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<header class="topbar">
+    <a class="brand" th:href="@{/}">AI&nbsp;Control</a>
+    <nav>
+        <a th:href="@{/}">Dashboard</a>
+        <a th:href="@{/models}">Models</a>
+        <a th:href="@{/tools}">Tools</a>
+        <a th:href="@{/mcp}">MCP</a>
+        <a th:href="@{/policies}">Policies</a>
+        <a th:href="@{/eval}">Eval</a>
+        <a th:href="@{/runs}">Runs</a>
+        <a th:href="@{/actuator/health}">Health</a>
+    </nav>
+</header>
+
+<main>
+    <div class="flash flash-ok" th:if="${notice}" th:text="${notice}"></div>
+    <div class="flash flash-error" th:if="${error}" th:text="${error}"></div>
+    <div th:replace="${content}"></div>
+</main>
+
+<footer>
+    <span>Experimental harness &mdash; the model server is at </span>
+    <code th:text="${baseUrl}">http://localhost:1234</code>
+</footer>
+
+<script th:src="@{/js/run-trace.js}" defer></script>
+</body>
+</html>

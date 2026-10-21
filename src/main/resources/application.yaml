@@ -1,0 +1,168 @@
+spring:
+  application:
+    name: ai-controll
+
+  # Java 25: model calls and tool calls both block, so give every request its own virtual thread.
+  threads:
+    virtual:
+      enabled: true
+
+  datasource:
+    url: jdbc:h2:file:./data/ai-controll;AUTO_SERVER=TRUE;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+
+  jpa:
+    # Flyway owns the schema; Hibernate only checks that the entities agree with it.
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+  thymeleaf:
+    cache: false
+
+harness:
+  lm-studio:
+    base-url: http://localhost:1234
+    # LM Studio only requires a token when authentication is enabled in its server settings,
+    # or when using locally configured MCP plugins.
+    api-token: ${LM_API_TOKEN:}
+    connect-timeout: 5s
+    # Generous: a cold model load plus a long generation can easily exceed a minute.
+    read-timeout: 300s
+    # Discovered via GET /api/models. Kept in config rather than in code precisely because
+    # the harness is meant to be able to swap the model under test.
+    default-model: "qwen-4b-6q-unc"
+    # LM Studio serves a single model instance, so a second concurrent request does not run
+    # alongside the first -- it queues inside the server and inherits its latency. Raise this only
+    # if the server is genuinely serving several instances; otherwise every timing the harness
+    # records becomes a measurement of how busy it was.
+    max-concurrent-requests: 1
+    # A model still loading answers 503 for a few seconds. Losing a run, or a whole batch variant,
+    # to that is worse than waiting. Every retry is journalled as MODEL_RETRY, so this cannot
+    # quietly paper over a server that is actually unwell.
+    max-retries: 1
+    retry-backoff: 2s
+
+  journal:
+    # A streamed response is one event envelope per token, not a document: 2,758 tokens measured
+    # 820 KB of mostly repeated framing. Bodies beyond this are dropped with an explicit marker.
+    max-raw-body-chars: 32768
+    # 0 keeps every run forever, which is the right default for an instrument: deleting a run cannot
+    # be undone. Set a number of days on a long-lived instance -- the journal holds the exact bytes
+    # of every request and response, so a few weeks of batches is measured in gigabytes. Runs cited
+    # by an evaluation batch are never pruned, whatever this says.
+    retention-days: 0
+
+  # How a growing conversation is fitted into the model's context window. Without this the server
+  # decides, and llama.cpp-backed servers discard from the front -- taking the system prompt and the
+  # task first, so the model appears to forget what it was doing.
+  context:
+    # 0 asks the server what the model was loaded with, which is the only reliable answer:
+    # context_length is set at load time, so the same weights can be resident at 4k or at 32k.
+    # Set a number here only to override that.
+    default-length: 0
+    # Slack between the estimate and the real window. Being a little under costs nothing; being
+    # over costs the front of the conversation.
+    safety-margin-tokens: 128
+    # Exchanges never dropped. Below two, a model loses the tool result it asked for last step.
+    keep-recent-exchanges: 2
+    # A tool result is shortened to this rather than removed, so the model can still see which call
+    # it answers.
+    min-tool-result-chars: 240
+
+  tools:
+    default-timeout: 30s
+    max-output-chars: 4000
+    http:
+      # ALLOWLIST | PUBLIC | OPEN.
+      #
+      #   ALLOWLIST  only hosts named below. The right setting when the model is reading text you
+      #              did not write, because a fetched page is untrusted input and a page that tells
+      #              the model to fetch "somewhere-else/?data=..." then has nowhere to send it.
+      #   PUBLIC     any host that resolves to a public address. Private, loopback and link-local
+      #              addresses are STILL refused -- the protection that matters is the address
+      #              check below, not this list, and it costs no configuration at all.
+      #   OPEN       no checks. A throwaway sandbox, and nothing else.
+      mode: ALLOWLIST
+      # Consulted only in ALLOWLIST mode. Exact hosts or one leading wildcard: "*.example.com".
+      allowed-hosts: ["www.startpage.com", "github.com", "google.com"]
+      # Never reachable, in any mode but OPEN, whatever else permits them.
+      blocked-hosts: []
+      # The check worth keeping. Off means the harness cannot reach 169.254.169.254, localhost,
+      # 10.x or 192.168.x -- whatever the mode, and whatever DNS claims. Naming a host does not
+      # exempt it: "*.example.com" is not consent to reach whatever internal.example.com resolves to.
+      allow-private-addresses: false
+      max-response-bytes: 1048576
+    files:
+      # Empty means file_read refuses every call. The model chooses the path, so an ungated file tool
+      # reads whatever this process can see. Name directories explicitly to turn it on:
+      #   allowed-directories: ["C:/work/notes"]
+      # Paths are resolved to their real location with symlinks followed before being compared, so
+      # neither ".." nor a link inside an allowed directory can escape it.
+      allowed-directories: []
+      max-bytes: 1048576
+    # Reading the journal back as evidence about how the model copes with each tool. Observation
+    # only: every proposal built on it goes through you and then through the ordinary versioned
+    # save, so a wording change stays attributable.
+    learning:
+      # A window of recent journal entries, not all history.
+      sample-events: 2000
+      # The drafting model pays the same reasoning tax as everything else here, and worse: asked to
+      # write a tool description, this model spent 4096 of 4096 output tokens reasoning and finished
+      # on LENGTH without writing a word. Measured, not guessed.
+      max-output-tokens: 6000
+      # Empty means the model under test drafts its own tool descriptions, which is cheap and not
+      # independent. Naming a different one is the only way to separate the two.
+      model-key: ""
+
+  mcp:
+    request-timeout: 60s
+    initialize-timeout: 30s
+    stdio:
+      # Empty means no stdio MCP server can be launched. Launching one runs a program, so this is a
+      # deliberate statement of which programs you trust, e.g.:
+      #   allowed-commands: ["npx", "python", "uvx"]
+      # Arguments are not constrained -- an allowed interpreter runs whatever script it is handed.
+      allowed-commands: []
+
+  eval:
+    judge:
+      # The judge is subject to the same reasoning tax as the model under test. At 1024 this model
+      # reliably spent the whole allowance thinking and returned no verdict, failing every judged
+      # assertion for reasons unrelated to the answer being graded.
+      max-output-tokens: 4096
+      # Empty means the model under test also grades itself, which is cheap and not independent.
+      # Naming a different model is the only way to make the instrument partly independent of what
+      # it measures.
+      model-key: ""
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.example.ai_controll: DEBUG
+
+server:
+  port: 8080
+  # Localhost only. This process holds an outbound HTTP primitive and can launch stdio MCP
+  # servers, and it has no authentication of its own. Binding it to every interface would put both
+  # on the network. Change this only behind something that authenticates.
+  address: 127.0.0.1

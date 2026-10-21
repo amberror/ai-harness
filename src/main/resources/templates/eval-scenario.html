@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/layout :: page('Scenario', ~{::section})}" lang="en">
+<body>
+<section>
+    <div class="run-header">
+        <div>
+            <h1 th:text="${scenario.name}">name</h1>
+            <span class="subtle" th:text="${scenario.description}">description</span>
+        </div>
+        <a th:href="@{'/api/eval/scenarios/' + ${scenario.id} + '/export'}">Export YAML</a>
+    </div>
+
+    <h2>Run a batch</h2>
+    <p class="subtle">
+        Give the variant a name and change one thing in the overrides. Comparing two batches that
+        differ in exactly one field is what makes a difference in pass rate mean something.
+    </p>
+    <form method="post" th:action="@{'/eval/scenarios/' + ${scenario.id} + '/run'}" class="run-form">
+        <div class="field-row">
+            <div class="field">
+                <label for="label">Variant name</label>
+                <input id="label" name="label" value="baseline" placeholder="terse tool description">
+            </div>
+            <div class="field">
+                <label for="repetitions">Repetitions</label>
+                <input id="repetitions" name="repetitions" type="number" min="1" max="200" value="5">
+            </div>
+            <div class="field field-submit">
+                <button type="submit">Run batch</button>
+            </div>
+        </div>
+        <div class="field field-wide">
+            <label for="variantJson">Overrides <span class="subtle">(JSON, optional)</span></label>
+            <input id="variantJson" name="variantJson"
+                   placeholder='{"temperature": 0.7, "lenientArguments": true}'>
+            <span class="subtle">
+                Any field a run accepts: systemPrompt, temperature, tools, maxSteps,
+                lenientArguments, maxOutputTokens, tokenBudget.
+            </span>
+        </div>
+    </form>
+
+    <h2>Batches <span class="subtle">&mdash; the comparison across variants</span></h2>
+    <form method="get" th:action="@{/eval/compare}" class="run-form">
+        <div class="field-row">
+            <div class="field">
+                <label for="a">Compare</label>
+                <select id="a" name="a">
+                    <option th:each="b : ${batches}" th:value="${b.id}"
+                            th:text="${b.label} + ' (' + ${b.passedCount} + '/' + ${b.completedCount} + ')'">
+                    </option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="b">with</label>
+                <select id="b" name="b">
+                    <option th:each="b : ${batches}" th:value="${b.id}"
+                            th:text="${b.label} + ' (' + ${b.passedCount} + '/' + ${b.completedCount} + ')'">
+                    </option>
+                </select>
+            </div>
+            <div class="field field-submit">
+                <button type="submit">Compare</button>
+            </div>
+        </div>
+    </form>
+    <table>
+        <thead>
+        <tr>
+            <th>Started</th>
+            <th>Variant</th>
+            <th>Pass rate</th>
+            <th>Reps</th>
+            <th>Tokens out</th>
+            <th>Status</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="b : ${batches}">
+            <td class="nowrap">
+                <a th:href="@{'/eval/batches/' + ${b.id}}"
+                   th:text="${#temporals.format(b.startedAt, 'MM-dd HH:mm')}">time</a>
+            </td>
+            <td th:text="${b.label}">baseline</td>
+            <td>
+                <span class="pass-rate"
+                      th:classappend="${b.passRate() >= 0.9} ? 'pass-good' :
+                                      (${b.passRate() >= 0.5} ? 'pass-mixed' : 'pass-bad')"
+                      th:text="${#numbers.formatPercent(b.passRate(), 1, 0)}">0%</span>
+                <span class="subtle" th:text="'(' + ${b.passedCount} + '/' + ${b.completedCount} + ')'"></span>
+            </td>
+            <td th:text="${b.repetitions}">5</td>
+            <td class="subtle" th:text="${b.totalOutputTokens}">0</td>
+            <td>
+                <span class="badge"
+                      th:classappend="${b.status == 'COMPLETED'} ? 'badge-ok' :
+                                      (${b.status == 'RUNNING'} ? 'badge-warn' : 'badge-error')"
+                      th:text="${b.status}">RUNNING</span>
+            </td>
+        </tr>
+        <tr th:if="${#lists.isEmpty(batches)}">
+            <td colspan="6" class="empty">No batches for this scenario yet.</td>
+        </tr>
+        </tbody>
+    </table>
+
+    <h2>Definition</h2>
+    <pre class="payload" th:text="${yaml}">yaml</pre>
+
+    <form method="post" th:action="@{'/eval/scenarios/' + ${scenario.id} + '/delete'}" class="inline-form">
+        <button type="submit" class="danger">Delete this scenario</button>
+        <span class="subtle">Its batches and results go with it.</span>
+    </form>
+</section>
+</body>
+</html>

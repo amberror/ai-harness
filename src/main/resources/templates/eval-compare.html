@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/layout :: page('Compare', ~{::section})}" lang="en">
+<body>
+<section>
+    <h1>Comparing two batches</h1>
+
+    <p class="note" th:unless="${comparison.separable}">
+        <strong>These two cannot be told apart.</strong> Their confidence intervals overlap, so the
+        difference in pass rate is within what this many repetitions would produce by chance. That is
+        not evidence the variants behave the same &mdash; it is the absence of evidence that they
+        differ. Run more repetitions if the question matters.
+    </p>
+    <p class="note" th:if="${comparison.separable}">
+        <strong>These two are distinguishable.</strong> The intervals do not overlap, so the
+        difference is larger than sampling noise at this number of repetitions.
+    </p>
+
+    <div class="stats">
+        <div class="stat">
+            <span class="stat-value pass-rate"
+                  th:text="${#numbers.formatPercent(comparison.left.passRate.rate, 1, 0)}">0%</span>
+            <span class="stat-label" th:text="${comparison.left.label}">A</span>
+            <span class="subtle" th:text="${comparison.left.passRate.asPercentRange()}">0%–0%</span>
+        </div>
+        <div class="stat">
+            <span class="stat-value pass-rate"
+                  th:text="${#numbers.formatPercent(comparison.right.passRate.rate, 1, 0)}">0%</span>
+            <span class="stat-label" th:text="${comparison.right.label}">B</span>
+            <span class="subtle" th:text="${comparison.right.passRate.asPercentRange()}">0%–0%</span>
+        </div>
+        <div class="stat">
+            <span class="stat-value"
+                  th:text="${comparison.left.passRate.total} + ' / ' + ${comparison.right.passRate.total}">0</span>
+            <span class="stat-label">repetitions</span>
+        </div>
+    </div>
+
+    <h2>What actually differed</h2>
+    <p class="subtle">
+        Computed from the stored variants rather than taken from the labels. A batch named
+        &ldquo;temperature 0.9&rdquo; that also changed the tool list is measuring two things at once,
+        and its result cannot be attributed to either.
+    </p>
+    <ul class="plain-list">
+        <li th:each="d : ${comparison.variantDiff}" th:text="${d}">field: a -&gt; b</li>
+        <li th:if="${#lists.isEmpty(comparison.variantDiff)}" class="subtle">
+            Nothing &mdash; these two batches ran the same settings. Any difference between them is
+            run-to-run variance, which is itself worth knowing.
+        </li>
+    </ul>
+
+    <h2>Per assertion</h2>
+    <p class="subtle">
+        Which check moved. A batch pass rate collapses every assertion into one bit, so it can say
+        that something got worse without ever saying what.
+    </p>
+    <table>
+        <thead>
+        <tr>
+            <th>Check</th>
+            <th th:text="${comparison.left.label}">A</th>
+            <th th:text="${comparison.right.label}">B</th>
+            <th>Change</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="d : ${comparison.assertionDeltas}">
+            <td th:text="${d.description}">check</td>
+            <td th:text="${d.leftRate == null} ? '—' : ${#numbers.formatPercent(d.leftRate, 1, 0)}">0%</td>
+            <td th:text="${d.rightRate == null} ? '—' : ${#numbers.formatPercent(d.rightRate, 1, 0)}">0%</td>
+            <td>
+                <span th:classappend="${d.change() > 0} ? 'pass-good' : (${d.change() < 0} ? 'pass-bad' : 'subtle')"
+                      th:text="${#numbers.formatPercent(d.change(), 1, 0)}">0%</span>
+            </td>
+        </tr>
+        <tr th:if="${#lists.isEmpty(comparison.assertionDeltas)}">
+            <td colspan="4" class="empty">Neither batch recorded any verdicts.</td>
+        </tr>
+        </tbody>
+    </table>
+
+    <p class="note" th:if="${comparison.left.anyNonReproducible or comparison.right.anyNonReproducible}">
+        One of these batches used a model-graded assertion. A judge is not reproducible, so part of
+        any movement here belongs to the instrument rather than to the model under test.
+    </p>
+
+    <p>
+        <a th:href="@{'/eval/batches/' + ${comparison.left.batchId}}">Open the first batch</a>
+        &middot;
+        <a th:href="@{'/eval/batches/' + ${comparison.right.batchId}}">Open the second</a>
+    </p>
+</section>
+</body>
+</html>

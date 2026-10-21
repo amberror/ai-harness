@@ -1,0 +1,223 @@
+/* AI Control console.
+   Deliberately plain: this is an instrument panel, so legibility of dense tabular data and of long
+   JSON payloads matters far more than decoration. */
+
+:root {
+    color-scheme: light dark;
+    --bg: #fbfbfa;
+    --surface: #ffffff;
+    --border: #e2e2df;
+    --text: #1b1b19;
+    --muted: #6d6d68;
+    --accent: #2f6f4f;
+    --danger: #a33a2c;
+    --warn: #8a6a1f;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #16171a;
+        --surface: #1e2024;
+        --border: #33363c;
+        --text: #e7e7e4;
+        --muted: #9a9a95;
+        --accent: #6fbf95;
+        --danger: #e08b7e;
+        --warn: #d9b45f;
+    }
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.topbar {
+    display: flex;
+    align-items: baseline;
+    gap: 2rem;
+    padding: 0.85rem 1.5rem;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+}
+
+.brand { font-weight: 650; letter-spacing: -0.01em; text-decoration: none; color: var(--text); }
+.topbar nav { display: flex; gap: 1.25rem; }
+.topbar nav a { color: var(--muted); text-decoration: none; }
+.topbar nav a:hover { color: var(--accent); }
+
+main { max-width: 1100px; margin: 0 auto; padding: 1.75rem 1.5rem 3rem; }
+
+h1 { font-size: 1.4rem; margin: 0 0 1.25rem; letter-spacing: -0.01em; }
+h2 { font-size: 1.05rem; margin: 1.75rem 0 0.75rem; }
+
+code { font-family: var(--mono); font-size: 0.9em; }
+.subtle { color: var(--muted); font-size: 0.86em; }
+
+/* Flash messages */
+.flash { padding: 0.7rem 0.9rem; border-radius: 6px; margin-bottom: 1.25rem; border: 1px solid; }
+.flash-ok { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.flash-error { border-color: var(--danger); color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, transparent); }
+
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.1rem 1.25rem; }
+.card-down { border-color: var(--danger); }
+.card-down h2 { margin-top: 0; color: var(--danger); }
+
+/* Stat row */
+.stats { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 0.5rem; }
+.stat {
+    flex: 1 1 8rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.9rem 1rem;
+}
+.stat-value { display: block; font-size: 1.7rem; font-weight: 600; letter-spacing: -0.02em; }
+.stat-label { display: block; color: var(--muted); font-size: 0.82rem; }
+
+/* Tables carry the dense data, so they get the most care. */
+table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+th, td { text-align: left; padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
+tbody tr:last-child td { border-bottom: none; }
+.actions-col { width: 1%; white-space: nowrap; }
+.empty { color: var(--muted); font-style: italic; }
+
+.badge {
+    display: inline-block;
+    padding: 0.08rem 0.45rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 0.75rem;
+    color: var(--muted);
+}
+.badge-ok { color: var(--accent); border-color: var(--accent); }
+.badge-warn { color: var(--warn); border-color: var(--warn); }
+
+/* Forms */
+.inline-form { display: flex; gap: 0.4rem; align-items: center; }
+.ctx-input { width: 6.5rem; }
+input, button {
+    font: inherit;
+    padding: 0.3rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    background: var(--bg);
+    color: var(--text);
+}
+button { cursor: pointer; border-color: var(--accent); color: var(--accent); background: transparent; }
+button:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+button.danger { border-color: var(--danger); color: var(--danger); }
+button.danger:hover { background: color-mix(in srgb, var(--danger) 12%, transparent); }
+
+.note {
+    margin: 1.25rem 0;
+    padding: 0.8rem 1rem;
+    border-left: 3px solid var(--border);
+    color: var(--muted);
+    background: var(--surface);
+    border-radius: 0 6px 6px 0;
+}
+
+footer { max-width: 1100px; margin: 0 auto; padding: 0 1.5rem 2rem; color: var(--muted); font-size: 0.85rem; }
+
+/* ---------------------------------------------------------------------------------------
+   Runs
+   --------------------------------------------------------------------------------------- */
+
+.run-form { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.15rem; margin-bottom: 1.5rem; }
+.field { display: flex; flex-direction: column; gap: 0.25rem; }
+.field-wide { margin-bottom: 0.85rem; }
+.field-row { display: flex; gap: 0.85rem; flex-wrap: wrap; align-items: flex-end; }
+.field-row .field { flex: 1 1 8rem; }
+.field-submit { flex: 0 0 auto; }
+.field label { font-size: 0.8rem; color: var(--muted); }
+textarea, .field input { width: 100%; font: inherit; padding: 0.4rem 0.6rem; border: 1px solid var(--border); border-radius: 5px; background: var(--bg); color: var(--text); }
+textarea { font-family: var(--mono); font-size: 0.88rem; resize: vertical; }
+.form-note { margin: 0.85rem 0 0; }
+
+.run-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.run-header h1 { margin-bottom: 0.2rem; }
+.badge-lg { font-size: 0.85rem; padding: 0.25rem 0.7rem; }
+.badge-error { color: var(--danger); border-color: var(--danger); }
+.nowrap { white-space: nowrap; }
+
+/* Live panes */
+.live-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+@media (max-width: 760px) { .live-grid { grid-template-columns: 1fr; } }
+.live-pane { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.live-pane-title { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.stream-pane { margin: 0; padding: 0.75rem; max-height: 16rem; overflow: auto; font-family: var(--mono); font-size: 0.82rem; white-space: pre-wrap; word-break: break-word; min-height: 3rem; }
+
+.pulse { display: inline-block; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--border); vertical-align: middle; }
+.pulse-on { background: var(--accent); animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+
+pre.answer { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0.9rem 1rem; white-space: pre-wrap; word-break: break-word; margin: 0; }
+
+/* Transcript */
+.transcript { display: flex; flex-direction: column; gap: 0.6rem; }
+.msg { background: var(--surface); border: 1px solid var(--border); border-left-width: 3px; border-radius: 6px; padding: 0.6rem 0.85rem; }
+.msg header { display: flex; gap: 0.6rem; align-items: baseline; margin-bottom: 0.35rem; }
+.msg .role { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
+.msg pre { margin: 0; white-space: pre-wrap; word-break: break-word; font-family: var(--mono); font-size: 0.85rem; }
+.msg-system { border-left-color: var(--muted); }
+.msg-user { border-left-color: var(--accent); }
+.msg-assistant { border-left-color: var(--warn); }
+.msg-tool { border-left-color: var(--danger); }
+pre.reasoning { color: var(--muted); font-style: italic; margin-top: 0.4rem; }
+
+/* Journal timeline */
+.timeline { display: flex; flex-direction: column; gap: 0.35rem; }
+.event { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 0.45rem 0.7rem; }
+.event-head { display: flex; gap: 0.7rem; align-items: baseline; flex-wrap: wrap; }
+.event-seq { font-family: var(--mono); font-size: 0.78rem; color: var(--muted); min-width: 2ch; }
+.event-type { font-family: var(--mono); font-size: 0.82rem; font-weight: 600; }
+.event-time { margin-left: auto; }
+.event-new { animation: slide-in 0.25s ease-out; }
+@keyframes slide-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+pre.payload { margin: 0.5rem 0 0; padding: 0.6rem; background: var(--bg); border-radius: 5px; font-family: var(--mono); font-size: 0.78rem; max-height: 24rem; overflow: auto; white-space: pre-wrap; word-break: break-word; }
+
+details summary { cursor: pointer; color: var(--muted); font-size: 0.82rem; }
+details summary:hover { color: var(--accent); }
+
+/* Tool picker */
+.tool-picker { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.tool-chip {
+    display: inline-flex; align-items: center; gap: 0.35rem;
+    padding: 0.2rem 0.6rem; border: 1px solid var(--border); border-radius: 999px;
+    cursor: pointer; font-size: 0.85rem;
+}
+.tool-chip:hover { border-color: var(--accent); }
+.tool-chip input { width: auto; margin: 0; }
+select { font: inherit; padding: 0.4rem 0.6rem; border: 1px solid var(--border); border-radius: 5px; background: var(--bg); color: var(--text); }
+
+/* Approval panel */
+.approval-panel {
+    background: var(--surface);
+    border: 1px solid var(--warn);
+    border-left-width: 3px;
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    margin: 1.25rem 0;
+}
+.approval-panel h2 { margin-top: 0; color: var(--warn); }
+.approval-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.85rem; }
+
+/* Pass rates: the number a batch exists to produce, so it gets to be legible at a glance. */
+.pass-rate { font-weight: 650; }
+.pass-good { color: var(--accent); }
+.pass-mixed { color: var(--warn); }
+.pass-bad { color: var(--danger); }
+
+/* The status badge and the stop button sit together at the top right of a run or batch. */
+.header-actions { display: flex; align-items: center; gap: 0.6rem; }
+
+/* A list of plain statements, e.g. what differs between two batches, without bullets shouting. */
+.plain-list { margin: 0.4rem 0 1rem 1.1rem; }
+.plain-list li { margin-bottom: 0.25rem; font-family: var(--mono, monospace); font-size: 0.85rem; }

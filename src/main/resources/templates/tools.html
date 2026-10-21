@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/layout :: page('Tools', ~{::section})}" lang="en">
+<body>
+<section>
+    <h1>Tools</h1>
+
+    <p class="note">
+        Editing a tool never overwrites it — each change is a new version and the old ones are kept.
+        When the model's behaviour changes, the useful question is always <em>against which version
+        of the schema</em>, and a mutable row cannot answer it.
+    </p>
+
+    <table>
+        <thead>
+        <tr>
+            <th>Name</th>
+            <th>Ver</th>
+            <th>Executor</th>
+            <th>Source</th>
+            <th>Description</th>
+            <th>State</th>
+            <th class="actions-col">Actions</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="t : ${tools}">
+            <td><a th:href="@{'/tools/' + ${t.name}}"><code th:text="${t.name}">name</code></a></td>
+            <td th:text="'v' + ${t.version}">v1</td>
+            <td><span class="badge" th:text="${t.executorType}">BUILTIN</span></td>
+            <td class="subtle" th:text="${t.source}">USER</td>
+            <td class="subtle" th:text="${#strings.abbreviate(t.description, 80)}">desc</td>
+            <td>
+                <span class="badge badge-ok" th:if="${t.enabled}">enabled</span>
+                <span class="badge badge-warn" th:unless="${t.enabled}">disabled</span>
+            </td>
+            <td class="actions-col">
+                <form method="post" th:action="@{'/tools/' + ${t.name} + '/enabled'}" class="inline-form">
+                    <input type="hidden" name="value" th:value="${!t.enabled}">
+                    <button type="submit" th:text="${t.enabled} ? 'Disable' : 'Enable'">Toggle</button>
+                </form>
+            </td>
+        </tr>
+        <tr th:if="${#lists.isEmpty(tools)}">
+            <td colspan="7" class="empty">No tools registered.</td>
+        </tr>
+        </tbody>
+    </table>
+
+    <h2>Add or replace a tool</h2>
+    <p class="subtle">
+        Submitting an existing name creates a new version of it rather than a duplicate.
+    </p>
+
+    <form method="post" th:action="@{/tools}" class="run-form">
+        <div class="field-row">
+            <div class="field">
+                <label for="name">Name</label>
+                <input id="name" name="name" required pattern="[a-zA-Z][a-zA-Z0-9_]*"
+                       placeholder="get_weather"
+                       title="Letters, digits and underscores, starting with a letter">
+            </div>
+            <div class="field">
+                <label for="executorType">Executor</label>
+                <select id="executorType" name="executorType">
+                    <option th:each="type : ${executorTypes}" th:value="${type}" th:text="${type}">HTTP</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="field field-wide">
+            <label for="description">Description</label>
+            <textarea id="description" name="description" rows="2" required
+                      placeholder="What the tool does, and when to use it."></textarea>
+            <span class="subtle">For a small model this is the single most influential text in the request.</span>
+        </div>
+
+        <div class="field field-wide">
+            <label for="parametersSchema">Arguments — JSON Schema</label>
+            <textarea id="parametersSchema" name="parametersSchema" rows="7" required
+                      placeholder='{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}'>
+            </textarea>
+        </div>
+
+        <div class="field field-wide">
+            <label for="executorConfig">Executor config <span class="subtle">(HTTP tools)</span></label>
+            <textarea id="executorConfig" name="executorConfig" rows="5"
+                      placeholder='{"method":"GET","url":"https://api.example.com/weather/{city}","headers":{"Accept":"application/json"}}'>
+            </textarea>
+            <span class="subtle">
+                Placeholders in braces are filled from the validated arguments and URL-encoded.
+            </span>
+        </div>
+
+        <div class="field-row">
+            <div class="field field-wide">
+                <label for="changeNote">Change note</label>
+                <input id="changeNote" name="changeNote" placeholder="Why this version exists">
+            </div>
+            <div class="field field-submit">
+                <button type="submit">Save version</button>
+            </div>
+        </div>
+    </form>
+
+    <div class="note">
+        <strong>HTTP egress.</strong>
+        The model chooses the arguments, so a URL-templated argument is a request primitive pointed
+        wherever it likes. Outbound calls are refused unless the host is on the allowlist.
+        <span th:if="${#lists.isEmpty(allowedHosts)}">
+            Nothing is currently allowed — set <code>harness.tools.http.allowed-hosts</code>.
+        </span>
+        <span th:unless="${#lists.isEmpty(allowedHosts)}">
+            Currently allowed: <code th:text="${allowedHosts}">[]</code>.
+        </span>
+    </div>
+</section>
+</body>
+</html>

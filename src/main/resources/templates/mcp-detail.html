@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/layout :: page('MCP server', ~{::section})}" lang="en">
+<body>
+<section>
+    <div class="run-header">
+        <div>
+            <h1 th:text="${server.label}">label</h1>
+            <code class="subtle" th:text="${server.command} ?: ${server.url}">target</code>
+        </div>
+        <div>
+            <span class="badge" th:text="${server.transport}">STDIO</span>
+            <span class="badge badge-ok" th:if="${connected}">connected</span>
+            <span class="badge badge-warn" th:unless="${server.enabled}">disabled</span>
+        </div>
+    </div>
+
+    <div class="flash flash-error" th:if="${discoveryError}">
+        <strong>Could not reach this server.</strong>
+        <span th:text="${discoveryError}">error</span>
+    </div>
+
+    <h2>Tools this server offers</h2>
+    <p class="subtle">
+        Nothing is imported until you choose. Putting twenty tools in front of a small model
+        measurably hurts its ability to pick the right one, so importing a subset is the normal case.
+    </p>
+
+    <form method="post" th:action="@{'/mcp/' + ${server.id} + '/sync'}"
+          th:if="${!#lists.isEmpty(discovered)}">
+        <table>
+            <thead>
+            <tr>
+                <th class="actions-col">Import</th>
+                <th>Name</th>
+                <th>Will be registered as</th>
+                <th>Description</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="t : ${discovered}">
+                <td class="actions-col">
+                    <input type="checkbox" name="tools" th:value="${t.name()}" checked>
+                </td>
+                <td><code th:text="${t.name()}">name</code></td>
+                <td><code class="subtle"
+                          th:text="${#strings.toLowerCase(server.label)} + '_' + ${t.name()}">prefixed</code></td>
+                <td class="subtle" th:text="${#strings.abbreviate(t.description() ?: '(none provided)', 90)}">desc</td>
+            </tr>
+            </tbody>
+        </table>
+        <div class="field-row" style="margin-top: 0.85rem;">
+            <button type="submit">Import selected</button>
+            <span class="subtle">
+                Re-importing writes a new version only where the upstream definition actually changed.
+            </span>
+        </div>
+    </form>
+
+    <p class="empty" th:if="${#lists.isEmpty(discovered)} and ${discoveryError} == null">
+        This server reports no tools.
+    </p>
+
+    <h2>Remove</h2>
+    <form method="post" th:action="@{'/mcp/' + ${server.id} + '/delete'}" class="inline-form">
+        <button type="submit" class="danger">Remove this server</button>
+        <span class="subtle">
+            Tools imported from it stay in the registry and will report that their server is gone.
+        </span>
+    </form>
+</section>
+</body>
+</html>

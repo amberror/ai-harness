@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/layout :: page('Models', ~{::section})}" lang="en">
+<body>
+<section>
+    <h1>Models</h1>
+
+    <div class="card card-down" th:unless="${reachable}">
+        <h2>LM Studio is not reachable</h2>
+        <p th:text="${unreachableMessage}">Cannot connect.</p>
+    </div>
+
+    <p class="note" th:if="${reachable}">
+        Context length is set at load time and cannot be changed afterwards, which is why the harness
+        manages models through LM Studio's native API rather than the OpenAI-compatible one. For a
+        small quantised model it is the main lever you have over how much history fits.
+    </p>
+
+    <table th:if="${reachable}">
+        <thead>
+        <tr>
+            <th>Model</th>
+            <th>Params</th>
+            <th>Quant</th>
+            <th>Max context</th>
+            <th>Capabilities</th>
+            <th>State</th>
+            <th class="actions-col">Actions</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="model : ${models}">
+            <td>
+                <code th:text="${model.key}">key</code>
+                <div class="subtle" th:text="${model.displayName}">display name</div>
+            </td>
+            <td th:text="${model.paramsString} ?: '—'">—</td>
+            <td th:text="${model.quantization != null ? model.quantization.name : '—'}">—</td>
+            <td th:text="${model.maxContextLength} ?: '—'">—</td>
+            <td>
+                <span class="badge" th:text="${model.type}">llm</span>
+                <span class="badge badge-ok" th:if="${model.supportsToolUse()}">tools</span>
+                <span class="badge" th:if="${model.capabilities != null and model.capabilities.vision}">vision</span>
+            </td>
+            <td>
+                <span class="badge badge-ok" th:if="${model.isLoaded()}">loaded</span>
+                <span class="subtle" th:unless="${model.isLoaded()}">not loaded</span>
+                <div class="subtle" th:if="${model.isLoaded() and model.loadedInstances[0].config != null}"
+                     th:text="'ctx ' + ${model.loadedInstances[0].config.contextLength}">ctx</div>
+            </td>
+            <td class="actions-col">
+                <form th:unless="${model.isLoaded()}" method="post" th:action="@{/models/load}" class="inline-form">
+                    <input type="hidden" name="modelKey" th:value="${model.key}">
+                    <input type="number" name="contextLength" min="256" step="256"
+                           placeholder="ctx" class="ctx-input"
+                           th:max="${model.maxContextLength}">
+                    <button type="submit">Load</button>
+                </form>
+                <form th:if="${model.isLoaded()}" method="post" th:action="@{/models/unload}" class="inline-form">
+                    <input type="hidden" name="instanceId" th:value="${model.loadedInstances[0].id}">
+                    <button type="submit" class="danger">Unload</button>
+                </form>
+            </td>
+        </tr>
+        <tr th:if="${#lists.isEmpty(models)}">
+            <td colspan="7" class="empty">No models found. Download one in LM Studio, or via
+                <code>POST /api/models/download</code>.
+            </td>
+        </tr>
+        </tbody>
+    </table>
+</section>
+</body>
+</html>

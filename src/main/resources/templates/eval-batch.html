@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/layout :: page('Batch', ~{::section})}" lang="en">
+<body>
+<section>
+    <div class="run-header">
+        <div>
+            <h1 th:text="${batch.label}">variant</h1>
+            <span class="subtle" th:if="${scenario != null}">
+                scenario <a th:href="@{'/eval/scenarios/' + ${scenario.id}}" th:text="${scenario.name}">name</a>
+            </span>
+        </div>
+        <div class="header-actions">
+            <span class="badge badge-lg"
+                  th:classappend="${batch.status == 'COMPLETED'} ? 'badge-ok' :
+                                  (${batch.status == 'RUNNING'} ? 'badge-warn' : 'badge-error')"
+                  th:text="${batch.status}">RUNNING</span>
+            <form th:if="${batch.status == 'RUNNING'}" method="post"
+                  th:action="@{'/eval/batches/' + ${batch.id} + '/cancel'}" class="inline-form">
+                <button type="submit" class="danger">Stop batch</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="stats">
+        <div class="stat">
+            <span class="stat-value pass-rate"
+                  th:classappend="${batch.passRate() >= 0.9} ? 'pass-good' :
+                                  (${batch.passRate() >= 0.5} ? 'pass-mixed' : 'pass-bad')"
+                  th:text="${#numbers.formatPercent(batch.passRate(), 1, 0)}">0%</span>
+            <span class="stat-label">pass rate</span>
+        </div>
+        <div class="stat">
+            <span class="stat-value" th:text="${stats.passRate.asPercentRange()}">0%–0%</span>
+            <span class="stat-label">95% interval</span>
+        </div>
+        <div class="stat">
+            <span class="stat-value" th:text="${batch.passedCount} + ' / ' + ${batch.completedCount}">0</span>
+            <span class="stat-label">passed</span>
+        </div>
+        <div class="stat">
+            <span class="stat-value" th:text="${batch.repetitions}">0</span>
+            <span class="stat-label">repetitions</span>
+        </div>
+        <div class="stat">
+            <span class="stat-value" th:text="${batch.totalOutputTokens}">0</span>
+            <span class="stat-label">output tokens</span>
+        </div>
+    </div>
+
+    <div class="flash flash-error" th:if="${batch.error}" th:text="${batch.error}"></div>
+
+    <p class="note" th:if="${batch.variantJson}">
+        <strong>Overrides applied:</strong>
+        <code th:text="${batch.variantJson}">{}</code>
+    </p>
+
+    <p class="note">
+        The interval is what this many repetitions can actually support. Four passes out of five is
+        &ldquo;80%&rdquo;, but five observations are consistent with anything from about 38% to 96%
+        &mdash; so a variant at 100% and one at 80% are not yet different from each other. Widen the
+        interval by reading it, or narrow it by running more repetitions.
+    </p>
+    <p class="note" th:if="${stats.anyNonReproducible}">
+        This batch includes a model-graded assertion. That check is not reproducible, so a pass rate
+        that moves between batches may be the judge rather than the model being judged.
+    </p>
+
+    <h2>Per assertion <span class="subtle">&mdash; which check actually fails</span></h2>
+    <p class="subtle">
+        The batch pass rate collapses every check into a single bit. This is the same data
+        un-collapsed: a run that fails because the answer is wrong and one that fails because it took
+        too many steps call for opposite responses.
+    </p>
+    <table>
+        <thead>
+        <tr>
+            <th>Check</th>
+            <th>Passed</th>
+            <th>Rate</th>
+            <th>95% interval</th>
+            <th>First failure</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="a : ${stats.assertions}">
+            <td>
+                <span th:text="${a.description}">check</span>
+                <span class="badge badge-warn" th:unless="${a.reproducible}">judged</span>
+            </td>
+            <td class="nowrap" th:text="${a.passes} + ' / ' + ${a.total}">0 / 0</td>
+            <td>
+                <span class="pass-rate"
+                      th:classappend="${a.interval.rate >= 0.9} ? 'pass-good' :
+                                      (${a.interval.rate >= 0.5} ? 'pass-mixed' : 'pass-bad')"
+                      th:text="${#numbers.formatPercent(a.interval.rate, 1, 0)}">0%</span>
+            </td>
+            <td class="subtle nowrap" th:text="${a.interval.asPercentRange()}">0%–0%</td>
+            <td class="subtle" th:text="${a.firstFailureDetail} ?: '—'">—</td>
+        </tr>
+        <tr th:if="${#lists.isEmpty(stats.assertions)}">
+            <td colspan="5" class="empty">No verdicts recorded yet.</td>
+        </tr>
+        </tbody>
+    </table>
+
+    <h2>Repetitions</h2>
+    <p class="subtle">
+        Each row links to the run behind it. A pass rate with no way back to the evidence would tell
+        you that something is wrong without ever telling you what.
+    </p>
+    <table>
+        <thead>
+        <tr>
+            <th>#</th>
+            <th>Result</th>
+            <th>Run status</th>
+            <th>Duration</th>
+            <th>Tokens out</th>
+            <th>Assertions</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="r : ${results}">
+            <td th:text="${r.repetition}">1</td>
+            <td>
+                <span class="badge badge-ok" th:if="${r.passed}">pass</span>
+                <span class="badge badge-error" th:unless="${r.passed}">fail</span>
+            </td>
+            <td>
+                <a th:if="${r.runId != null}" th:href="@{'/runs/' + ${r.runId}}"
+                   th:text="${r.runStatus}">status</a>
+                <span th:unless="${r.runId != null}" th:text="${r.runStatus}">status</span>
+            </td>
+            <td class="subtle nowrap" th:text="${r.durationMs} + ' ms'">0 ms</td>
+            <td class="subtle" th:text="${r.outputTokens}">0</td>
+            <td>
+                <details>
+                    <summary>verdicts</summary>
+                    <pre class="payload" th:text="${r.assertionsJson}">[]</pre>
+                </details>
+            </td>
+        </tr>
+        <tr th:if="${#lists.isEmpty(results)}">
+            <td colspan="6" class="empty">No repetitions recorded yet.</td>
+        </tr>
+        </tbody>
+    </table>
+</section>
+</body>
+</html>

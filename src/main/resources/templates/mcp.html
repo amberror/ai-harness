@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/layout :: page('MCP', ~{::section})}" lang="en">
+<body>
+<section>
+    <h1>MCP servers</h1>
+
+    <p class="note">
+        The harness runs the MCP client itself rather than letting LM Studio do it. That is the same
+        decision as owning the agentic loop, for the same reason: a call made by someone else can be
+        watched but not governed. Tools from a server are <em>imported</em> into the registry, so an
+        MCP tool is validated, versioned, journalled and editable exactly like a built-in one.
+    </p>
+
+    <table>
+        <thead>
+        <tr>
+            <th>Label</th>
+            <th>Transport</th>
+            <th>Target</th>
+            <th>Status</th>
+            <th>Last synced</th>
+            <th class="actions-col">Actions</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="s : ${servers}">
+            <td><a th:href="@{'/mcp/' + ${s.id}}" th:text="${s.label}">label</a></td>
+            <td><span class="badge" th:text="${s.transport}">STDIO</span></td>
+            <td><code th:text="${s.command} ?: ${s.url} ?: '—'">target</code></td>
+            <td>
+                <span class="badge" th:classappend="${s.status == 'CONNECTED'} ? 'badge-ok' :
+                                                    (${s.status == 'ERROR'} ? 'badge-error' : '')"
+                      th:text="${s.status}">UNKNOWN</span>
+                <span class="badge badge-warn" th:unless="${s.enabled}">disabled</span>
+            </td>
+            <td class="subtle nowrap"
+                th:text="${s.lastSyncedAt != null} ? ${#temporals.format(s.lastSyncedAt, 'yyyy-MM-dd HH:mm')} : 'never'">never</td>
+            <td class="actions-col">
+                <form method="post" th:action="@{'/mcp/' + ${s.id} + '/enabled'}" class="inline-form">
+                    <input type="hidden" name="value" th:value="${!s.enabled}">
+                    <button type="submit" th:text="${s.enabled} ? 'Disable' : 'Enable'">Toggle</button>
+                </form>
+            </td>
+        </tr>
+        <tr th:if="${#lists.isEmpty(servers)}">
+            <td colspan="6" class="empty">No MCP servers configured.</td>
+        </tr>
+        </tbody>
+    </table>
+
+    <h2>Add a server</h2>
+    <form method="post" th:action="@{/mcp}" class="run-form">
+        <div class="field-row">
+            <div class="field">
+                <label for="label">Label</label>
+                <input id="label" name="label" required placeholder="filesystem">
+                <span class="subtle">Prefixes imported tool names, so two servers can both offer <code>search</code>.</span>
+            </div>
+            <div class="field">
+                <label for="transport">Transport</label>
+                <select id="transport" name="transport">
+                    <option th:each="t : ${transports}" th:value="${t}" th:text="${t}">STDIO</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="field-row">
+            <div class="field">
+                <label for="command">Command <span class="subtle">(stdio)</span></label>
+                <input id="command" name="command" placeholder="npx">
+            </div>
+            <div class="field">
+                <label for="argsJson">Args <span class="subtle">(stdio, JSON array)</span></label>
+                <input id="argsJson" name="argsJson" placeholder='["-y","@modelcontextprotocol/server-filesystem","/tmp"]'>
+            </div>
+        </div>
+
+        <div class="field-row">
+            <div class="field field-wide">
+                <label for="url">URL <span class="subtle">(HTTP transports)</span></label>
+                <input id="url" name="url" placeholder="https://example.com/mcp">
+            </div>
+            <div class="field field-submit">
+                <button type="submit">Add server</button>
+            </div>
+        </div>
+    </form>
+
+    <div class="note">
+        <strong>Launching a stdio server runs a program.</strong>
+        A server configuration is editable at runtime, so without a list this page would also be a
+        way to execute arbitrary commands. The executable must be named in
+        <code>harness.mcp.stdio.allowed-commands</code>.
+        <span th:if="${#lists.isEmpty(allowedCommands)}">
+            Nothing is currently allowed, so no stdio server can start.
+        </span>
+        <span th:unless="${#lists.isEmpty(allowedCommands)}">
+            Currently allowed: <code th:text="${allowedCommands}">[]</code>.
+        </span>
+        Arguments are deliberately not restricted — an allowed interpreter will run whatever script
+        it is handed, so checking them would be false assurance.
+    </div>
+</section>
+</body>
+</html>

@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/layout :: page('Evaluation', ~{::section})}" lang="en">
+<body>
+<section>
+    <h1>Evaluation</h1>
+
+    <p class="note">
+        The unit of measurement here is a <em>batch</em>, not a run. For a 4B model a single passing
+        run is an anecdote &mdash; even at temperature zero the same prompt does not always produce
+        the same behaviour. Running a scenario N times and reporting the pass rate is the smallest
+        claim worth making, and comparing two batches that differ in exactly one thing is the only
+        way to attribute a change to anything.
+    </p>
+
+    <h2>Scenarios</h2>
+    <table>
+        <thead>
+        <tr>
+            <th>Name</th>
+            <th>Description</th>
+            <th>State</th>
+            <th class="actions-col">Actions</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="s : ${scenarios}">
+            <td><a th:href="@{'/eval/scenarios/' + ${s.id}}" th:text="${s.name}">name</a></td>
+            <td class="subtle" th:text="${#strings.abbreviate(s.description ?: '—', 80)}">desc</td>
+            <td>
+                <span class="badge badge-ok" th:if="${s.enabled}">enabled</span>
+                <span class="badge badge-warn" th:unless="${s.enabled}">disabled</span>
+            </td>
+            <td class="actions-col">
+                <form method="post" th:action="@{'/eval/scenarios/' + ${s.id} + '/enabled'}"
+                      class="inline-form">
+                    <input type="hidden" name="value" th:value="${!s.enabled}">
+                    <button type="submit" th:text="${s.enabled} ? 'Disable' : 'Enable'">Toggle</button>
+                </form>
+            </td>
+        </tr>
+        <tr th:if="${#lists.isEmpty(scenarios)}">
+            <td colspan="4" class="empty">No scenarios yet. Import one below.</td>
+        </tr>
+        </tbody>
+    </table>
+
+    <h2>Recent batches</h2>
+    <table>
+        <thead>
+        <tr>
+            <th>Started</th>
+            <th>Variant</th>
+            <th>Pass rate</th>
+            <th>Progress</th>
+            <th>Status</th>
+            <th>Tokens</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="b : ${batches}">
+            <td class="nowrap">
+                <a th:href="@{'/eval/batches/' + ${b.id}}"
+                   th:text="${#temporals.format(b.startedAt, 'MM-dd HH:mm')}">time</a>
+            </td>
+            <td th:text="${b.label}">baseline</td>
+            <td>
+                <span class="pass-rate"
+                      th:classappend="${b.passRate() >= 0.9} ? 'pass-good' :
+                                      (${b.passRate() >= 0.5} ? 'pass-mixed' : 'pass-bad')"
+                      th:text="${#numbers.formatPercent(b.passRate(), 1, 0)}">0%</span>
+                <span class="subtle" th:text="'(' + ${b.passedCount} + '/' + ${b.completedCount} + ')'"></span>
+            </td>
+            <td class="subtle" th:text="${b.completedCount} + ' / ' + ${b.repetitions}">0 / 0</td>
+            <td>
+                <span class="badge"
+                      th:classappend="${b.status == 'COMPLETED'} ? 'badge-ok' :
+                                      (${b.status == 'RUNNING'} ? 'badge-warn' : 'badge-error')"
+                      th:text="${b.status}">RUNNING</span>
+            </td>
+            <td class="subtle nowrap"
+                th:text="${b.totalInputTokens} + ' / ' + ${b.totalOutputTokens}">0 / 0</td>
+        </tr>
+        <tr th:if="${#lists.isEmpty(batches)}">
+            <td colspan="6" class="empty">No batches yet.</td>
+        </tr>
+        </tbody>
+    </table>
+
+    <h2>Import scenarios</h2>
+    <p class="subtle">
+        Accepts one scenario or a list of them. Export from a scenario page to get the shape, and to
+        commit an experiment's definition next to the code it measures.
+    </p>
+    <form method="post" th:action="@{/eval/import}" class="run-form">
+        <div class="field field-wide">
+            <label for="yaml">YAML</label>
+            <textarea id="yaml" name="yaml" rows="14" required placeholder="name: arithmetic-via-tool
+description: The model must use the tool rather than compute it itself.
+input: What is 4877 multiplied by 3391? Use the tool, then state just the number.
+systemPrompt: Use the calc_eval tool for any arithmetic.
+tools:
+  - calc_eval
+config:
+  maxSteps: 6
+  maxOutputTokens: 1200
+assertions:
+  - kind: STATUS
+    value: FINISHED
+  - kind: TOOL_CALLED
+    value: calc_eval
+  - kind: OUTPUT_CONTAINS
+    value: '16537907'
+  - kind: NO_INVALID_TOOL_CALLS
+  - kind: NO_EVENT
+    value: LOOP_DETECTED"></textarea>
+        </div>
+        <button type="submit">Import</button>
+    </form>
+</section>
+</body>
+</html>

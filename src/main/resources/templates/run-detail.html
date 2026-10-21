@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{fragments/layout :: page('Run', ~{::section})}" lang="en">
+<body>
+<section th:attr="data-run-id=${run.id}, data-live=${live}">
+    <div class="run-header">
+        <div>
+            <h1>Run</h1>
+            <code class="subtle" th:text="${run.id}">id</code>
+        </div>
+        <div class="header-actions">
+            <span class="badge badge-lg"
+                  th:classappend="${run.status.name() == 'FINISHED'} ? 'badge-ok' :
+                                  (${run.status.name() == 'RUNNING'} ? 'badge-warn' : 'badge-error')"
+                  th:text="${run.status}" id="run-status">status</span>
+            <!-- Stopping keeps the transcript and the journal: looking at what it did is almost
+                 always why it is being stopped. -->
+            <form th:if="${!run.status.terminal}" method="post"
+                  th:action="@{'/runs/' + ${run.id} + '/cancel'}" class="inline-form">
+                <button type="submit" class="danger">Stop run</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="stats">
+        <div class="stat">
+            <span class="stat-value" th:text="${run.stepsUsed}">0</span>
+            <span class="stat-label">steps</span>
+        </div>
+        <div class="stat">
+            <span class="stat-value" th:text="${run.inputTokens}">0</span>
+            <span class="stat-label">input tokens</span>
+        </div>
+        <div class="stat">
+            <span class="stat-value" th:text="${run.outputTokens}">0</span>
+            <span class="stat-label">output tokens</span>
+        </div>
+        <div class="stat">
+            <span class="stat-value" th:text="${run.durationMs != null} ? ${run.durationMs} + ' ms' : '…'">…</span>
+            <span class="stat-label">duration</span>
+        </div>
+    </div>
+
+    <div class="flash flash-error" th:if="${run.error}" th:text="${run.error}"></div>
+
+    <!-- The decision is made here, alongside the transcript and journal that led to it. -->
+    <div class="approval-panel" th:if="${pendingApproval != null}">
+        <h2>This run is waiting for you</h2>
+        <p>
+            The model wants to call <code th:text="${pendingApproval.toolName}">tool</code>.
+            <span class="subtle" th:text="${pendingApproval.reason}">why</span>
+        </p>
+        <pre class="payload" th:text="${pendingApproval.argumentsJson}">{}</pre>
+
+        <form method="post" th:action="@{'/approvals/' + ${pendingApproval.id} + '/decide'}">
+            <input type="hidden" name="runId" th:value="${run.id}">
+            <div class="field field-wide">
+                <label for="note">Note <span class="subtle">(optional, recorded in the journal)</span></label>
+                <input id="note" name="note" placeholder="Why you decided this way">
+            </div>
+            <!-- One parameter rather than a decision plus a scope: a button submits a single
+                 name/value pair, and splitting it across two would need JavaScript to keep them in
+                 step. Four explicit actions cannot get out of step with each other. -->
+            <div class="approval-actions">
+                <button type="submit" name="action" value="APPROVE_CALL">Approve this call</button>
+                <button type="submit" name="action" value="APPROVE_RUN">Approve for this run</button>
+                <button type="submit" name="action" value="APPROVE_ALWAYS">Always allow this tool</button>
+                <button type="submit" name="action" value="DENY" class="danger">Decline</button>
+            </div>
+            <p class="subtle">
+                &ldquo;Always&rdquo; writes a policy rule, so a standing exemption is visible on the
+                policy page rather than hidden inside this run. Declining is never broadened &mdash;
+                it applies to this call only, and the model is told it was refused so it can take
+                another route.
+            </p>
+        </form>
+    </div>
+
+    <!-- Live panes. Only rendered while a run can still produce output. -->
+    <div id="live-panes" th:if="${live}">
+        <h2>Live <span class="pulse" id="live-dot" title="connected"></span></h2>
+        <div class="live-grid">
+            <div class="live-pane">
+                <div class="live-pane-title">Reasoning <span class="subtle">(recorded, never sent back)</span></div>
+                <pre id="live-reasoning" class="stream-pane"></pre>
+            </div>
+            <div class="live-pane">
+                <div class="live-pane-title">Answer</div>
+                <pre id="live-content" class="stream-pane"></pre>
+            </div>
+        </div>
+    </div>
+
+    <h2>Final answer</h2>
+    <pre class="answer" th:if="${finalOutput}" th:text="${finalOutput}">answer</pre>
+    <p class="empty" th:unless="${finalOutput}">No answer recorded.</p>
+
+    <h2>Transcript <span class="subtle">— what the model was actually shown</span></h2>
+    <div class="transcript">
+        <article class="msg" th:each="m : ${transcript}" th:classappend="'msg-' + ${m.role.name().toLowerCase()}">
+            <header>
+                <span class="role" th:text="${m.role}">role</span>
+                <span class="subtle" th:if="${m.toolName}" th:text="${m.toolName}">tool</span>
+                <span class="badge badge-warn" th:if="${m.truncated}">truncated</span>
+            </header>
+            <pre th:if="${m.hasContent()}" th:text="${m.content}">content</pre>
+            <details th:if="${m.hasReasoning()}">
+                <summary>reasoning <span class="subtle" th:text="'(' + ${#strings.length(m.reasoning)} + ' chars)'"></span></summary>
+                <pre class="reasoning" th:text="${m.reasoning}">reasoning</pre>
+            </details>
+        </article>
+        <p class="empty" th:if="${#lists.isEmpty(transcript)}">Transcript not written yet.</p>
+    </div>
+
+    <h2>Journal <span class="subtle">— every boundary the harness crossed</span></h2>
+    <div class="timeline" id="timeline">
+        <article class="event" th:each="e : ${events}" th:attr="data-seq=${e.seq}">
+            <div class="event-head">
+                <span class="event-seq" th:text="${e.seq}">0</span>
+                <span class="event-type" th:text="${e.type}">TYPE</span>
+                <span class="subtle" th:text="'step ' + ${e.stepNo}">step</span>
+                <span class="subtle" th:if="${e.durationMs != null}" th:text="${e.durationMs} + ' ms'"></span>
+                <span class="subtle event-time" th:text="${#temporals.format(e.occurredAt, 'HH:mm:ss.SSS')}">t</span>
+            </div>
+            <details th:if="${e.payload != null}">
+                <summary>payload</summary>
+                <pre class="payload" th:text="${e.payload}">{}</pre>
+            </details>
+        </article>
+    </div>
+</section>
+</body>
+</html>
